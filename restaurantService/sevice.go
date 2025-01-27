@@ -5,6 +5,8 @@ import (
 	"fmt"
 	"sync"
 
+	w "kafkarestaurant/restaurantService/workers"
+
 	"github.com/IBM/sarama"
 	"github.com/defskela/logger"
 )
@@ -14,7 +16,17 @@ type Order struct {
 	Dishes  []string `json:"dishes"`
 }
 
+func initWorkers(n int) chan *w.Worker {
+	workersChan := make(chan *w.Worker, n)
+	for range n {
+		workersChan <- &w.Worker{}
+	}
+	return workersChan
+}
+
 func main() {
+	workersChan := initWorkers(3)
+
 	wg := &sync.WaitGroup{}
 	config := sarama.NewConfig()
 
@@ -52,6 +64,8 @@ func main() {
 					continue
 				}
 				logger.Debug(fmt.Sprintf("Получено сообщение из партиции %d: %+v", partition, order))
+				worker := <-workersChan
+				go worker.Work(order.Dishes, workersChan)
 			}
 		}(partitionConsumer, partition)
 	}
